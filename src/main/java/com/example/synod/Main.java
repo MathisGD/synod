@@ -2,6 +2,9 @@ package com.example.synod;
 
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
+
+import com.example.synod.message.Hold;
+import com.example.synod.message.Crash;
 import com.example.synod.message.Launch;
 import com.example.synod.message.Membership;
 
@@ -9,6 +12,7 @@ import java.util.*;
 
 public class Main {
     public static int N = 3;
+    public static int f = 1;
     public static void main(String[] args) throws InterruptedException {
         // Instantiate an actor system
         final ActorSystem system = ActorSystem.create("system");
@@ -23,13 +27,30 @@ public class Main {
 
         //give each process a view of all the other processes
         Membership m = new Membership(processes);
-        for (ActorRef actor : processes) {
-            actor.tell(m, ActorRef.noSender());
+        for (ActorRef process : processes) {
+            process.tell(m, ActorRef.noSender());
         }
 
-        processes.get(0).tell(
-                new Launch(),
-                ActorRef.noSender());
+        for (ActorRef process: processes) {
+            process.tell(new Launch(), ActorRef.noSender());
+        }
 
+        Collections.shuffle(processes);
+        
+        // processes 0, ..., f-1 are chosen to be fault prone.
+        // they will crash at some point.
+        for (int i = 0; i < f; i++) {
+            processes.get(i).tell(new Crash(), ActorRef.noSender());
+        }
+        
+        Thread.sleep(50);
+        
+        // processes[f] is choosen to propose.
+        // all the other processes hold.
+        for (int i = 0; i < N; i++) {
+            if (i != f) {
+                processes.get(i).tell(new Hold(), ActorRef.noSender());
+            }
+        }
     }
 }
