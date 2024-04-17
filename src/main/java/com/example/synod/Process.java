@@ -19,17 +19,18 @@ import com.example.synod.message.Launch;
 import com.example.synod.message.Membership;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
 public class Process extends UntypedAbstractActor {
     private final LoggingAdapter log = Logging.getLogger(getContext().getSystem(), this);// Logger attached to actor
 
-    // OFC State.
+    // Synod State.
     private int n; // number of processes
     private int i; // id of current process
-    private Membership processes; // other processes' references
-    private Boolean proposal; // proposal
+    private List<ActorRef> processes; // other processes' references
+    private Boolean proposal;
     private int ballot;
     private int readBallot;
     private int imposeBallot;
@@ -38,19 +39,20 @@ public class Process extends UntypedAbstractActor {
     private Boolean decided;
     private HashMap<ActorRef, Pair<Boolean, Integer>> states;
 
-    // Test state.
+    // Test State.
     private Boolean faultProne = false; // if true, the process will crash (forever) with proba alpha on each receive
-    private double alpha = 0.05; // crash probability on each receive for fault prone processes
+    private double alpha; // crash probability on each receive for fault prone processes
     private Boolean silent = false; // true when the process crashed and don't answer anything anymore
     private Boolean hold = false; // if true, the process stops proposing new values (useful for leader election)
+    private ActorRef terminator; // process to tell when you decided
     private Boolean verbose = false;
-
+    
     // Static method to create an actor.
-    public static Props createActor(int n, int i) {
-        return Props.create(Process.class, () -> new Process(n, i));
+    public static Props createActor(int n, int i, double alpha) {
+        return Props.create(Process.class, () -> new Process(n, i, alpha));
     }
 
-    public Process(int n, int i) {
+    public Process(int n, int i, double alpha) {
         this.n = n;
         this.i = i;
         this.ballot = i - n;
@@ -59,6 +61,7 @@ public class Process extends UntypedAbstractActor {
         this.decided = false;
         this.numberAck = 0;
         this.states = new HashMap<>();
+        this.alpha = alpha;
     }
 
     private void propose(Boolean v) {
@@ -69,7 +72,7 @@ public class Process extends UntypedAbstractActor {
         estimate = v;
         ballot += n;
 
-        for (ActorRef process : processes.references) {
+        for (ActorRef process : processes) {
             process.tell(new Read(ballot), this.getSelf());
         }
     }
@@ -94,7 +97,8 @@ public class Process extends UntypedAbstractActor {
             if (verbose)
                 log.info(this + " - membership received");
             Membership m = (Membership) message;
-            processes = m;
+            processes = m.references;
+            terminator = m.terminator;
 
         } else if (message instanceof Launch) {
             if (verbose)
@@ -152,7 +156,7 @@ public class Process extends UntypedAbstractActor {
                     proposal = estOfHighestBallot;
                 }
                 states.clear();
-                for (ActorRef process : processes.references) {
+                for (ActorRef process : processes) {
                     process.tell(new Impose(ballot, proposal), this.getSelf());
                 }
             }
@@ -175,7 +179,7 @@ public class Process extends UntypedAbstractActor {
             numberAck++;
             if (numberAck > n / 2) {
                 numberAck = 0;
-                for (ActorRef process : processes.references) {
+                for (ActorRef process : processes) {
                     process.tell(new Decide(proposal), this.getSelf());
                 }
             }
@@ -185,9 +189,10 @@ public class Process extends UntypedAbstractActor {
                 log.info(this + " - decide received");
             decided = true;
             log.info(this + " - DECIDED!!");
-            for (ActorRef process : processes.references) {
+            for (ActorRef process : processes) {
                 process.tell(new Decide(proposal), this.getSelf());
             }
+            terminator.tell(new Decide(proposal), this.getSelf());
         }
     }
 

@@ -11,23 +11,33 @@ import com.example.synod.message.Membership;
 import java.util.*;
 
 public class Main {
-    public static int N = 10;
-    public static int f = 0;
-
     public static void main(String[] args) throws InterruptedException {
+        // Parse command line arguments
+        if (args.length < 4) {
+            System.out.println("Usage: java Main <N> <f> <leaderDelay> <alpha>");
+            System.exit(1);
+        }
+
+        int N = Integer.parseInt(args[0]);
+        int f = Integer.parseInt(args[1]);
+        int leaderDelay = Integer.parseInt(args[2]);
+        double alpha = Double.parseDouble(args[3]);
+
         // Instantiate an actor system
         final ActorSystem system = ActorSystem.create("system");
         system.log().info("System started with N=" + N);
 
         ArrayList<ActorRef> processes = new ArrayList<>();
+        ActorRef terminator;
 
         for (int i = 0; i < N; i++) {
-            final ActorRef a = system.actorOf(Process.createActor(N, i));
+            final ActorRef a = system.actorOf(Process.createActor(N, i, alpha));
             processes.add(a);
         }
+        terminator = system.actorOf(Terminator.createActor(N-f));
 
         // give each process a view of all the other processes
-        Membership m = new Membership(processes);
+        Membership m = new Membership(processes, terminator);
         for (ActorRef process : processes) {
             process.tell(m, ActorRef.noSender());
         }
@@ -46,7 +56,7 @@ public class Main {
             processes.get(i).tell(new Crash(), ActorRef.noSender());
         }
 
-        Thread.sleep(1000);
+        Thread.sleep(leaderDelay);
 
         // processes[f] is choosen to propose.
         // all the other processes hold.
