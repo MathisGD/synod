@@ -88,7 +88,6 @@ public class Process extends UntypedAbstractActor {
         // If the process is silent, it doesn't answer anything anymore.
         if (silent)
             return;
-
         // If the process decided, it doesn't answer anything anymore.
         if (decided)
             return;
