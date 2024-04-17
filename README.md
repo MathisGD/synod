@@ -1,1 +1,1 @@
-A skeleton code base to implement Synod (Paxos) in Akka.
+Implementation of Synod (Paxos) in Akka, with consensus latency performance tests.
